@@ -1,75 +1,74 @@
-import com.pedropathing.follower.Follower;
+import com.pedropathing.drivetrain.DrivePowers;
+import com.pedropathing.follower.ManualDrive;
+import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-import org.firstinspires.ftc.robotcore.external.Telemetry;
 
-import Util.Limelight;
-import Util.RGBLight;
+import Subsystem.Robot;
 
 @com.qualcomm.robotcore.eventloop.opmode.TeleOp
 public class TeleOp extends OpMode {
 
-    DcMotor FL, BL, FR, BR;
-    Limelight limelight;
+    public int intakeOn = 0;
 
-    RGBLight led;
-    Follower f;
+    public Robot r;
+
 
     @Override
     public void init() {
-        FL = hardwareMap.get(DcMotor.class, "FLmotor");
-        BL = hardwareMap.get(DcMotor.class, "BLmotor");
-        FR = hardwareMap.get(DcMotor.class, "FRmotor");
-        BR = hardwareMap.get(DcMotor.class, "BRmotor");
-
-        FL.setDirection(DcMotorSimple.Direction.FORWARD);
-        BL.setDirection(DcMotorSimple.Direction.FORWARD);
-        FR.setDirection(DcMotorSimple.Direction.REVERSE);
-        BR.setDirection(DcMotorSimple.Direction.FORWARD);
-
-        limelight = new Limelight(hardwareMap, telemetry);
-        led = new RGBLight(hardwareMap);
-
+        r = new Robot(hardwareMap);
+        r.follower.setPose(new Pose(0, 0, Math.toRadians(0)));
+        r.turret.resetTurret();
     }
 
 
 
     @Override
     public void loop() {
-        double y  = -gamepad1.left_stick_y;  // frente/trás
-        double x  =  gamepad1.left_stick_x;  // strafe
-        double rx = - gamepad1.right_stick_x; // rotação
 
-        FL.setPower(y + x + rx);
-        BL.setPower(y - x + rx);
-        FR.setPower(y - x - rx);
-        BR.setPower(y + x - rx);
+        DrivePowers powers = ManualDrive.fieldCentric(
+                gamepad1.left_stick_y,
+                gamepad1.left_stick_x,
+                -gamepad1.right_stick_x,
+                r.follower.pose().heading()
+        );
+        r.follower.manual(powers);
+
+
+        if (gamepad1.right_trigger > 0.1 )
+            r.shooter.setVelocity();
+        else r.shooter.stop();
+
+
+
+        //INTAKE
+        if (gamepad1.rightBumperWasPressed()) intakeOn = (intakeOn == 1) ? 0 : 1;
+        if (gamepad1.leftBumperWasPressed()) intakeOn = (intakeOn == 2) ? 0 : 2;
+
+
+        else if (intakeOn == 1) r.intake.spin();
+        else if (intakeOn == 2) r.intake.out();
+        else r.intake.stop();
+
 
         if (gamepad1.a){
-            FL.setPower(1);
-        }else if (gamepad1.b){
-            FR.setPower(1);
-        }else if (gamepad1.y){
-            BR.setPower(1);
-        } else if (gamepad1.x) {
-            BL.setPower(1);
+            r.shooter.open();
         }else {
-
-
-            FL.setPower(0);
-            BL.setPower(0);
-            FR.setPower(0);
-            BR.setPower(0);
+            r.shooter.close();
         }
 
+        r.update();
 
-        if (limelight.pollenOK()){
-            led.green();
-        }else{
-            led.red();
-        }
 
+        r.follower.update();
+        Pose robotPose = r.follower.pose();
+
+
+        telemetry.addData("x", r.follower.pose().x());
+        telemetry.addData("y", r.follower.pose().y());
+        telemetry.addData("heading deg", Math.toDegrees(r.follower.pose().heading()));
+
+        telemetry.addData("erro", r.turret.getError());
+        telemetry.update();
     }
 }
