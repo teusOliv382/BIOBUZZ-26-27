@@ -3,8 +3,8 @@ import com.pedropathing.follower.ManualDrive;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
-
 import Subsystem.Robot;
+import Subsystem.Turret;
 
 @com.qualcomm.robotcore.eventloop.opmode.TeleOp
 public class TeleOp extends OpMode {
@@ -13,62 +13,64 @@ public class TeleOp extends OpMode {
 
     public Robot r;
 
-
     @Override
     public void init() {
         r = new Robot(hardwareMap);
-        r.follower.setPose(new Pose(0, 0, Math.toRadians(0)));
+        r.follower.setPose(new Pose(Robot.defaultPose.x(), Robot.defaultPose.y(), Robot.defaultPose.heading()));
         r.turret.resetTurret();
     }
 
-
-
     @Override
     public void loop() {
+        r.update();
+        Pose robotPose = r.follower.pose();
 
+        // 2) DRIVE
         DrivePowers powers = ManualDrive.fieldCentric(
                 gamepad1.left_stick_y,
                 gamepad1.left_stick_x,
                 -gamepad1.right_stick_x,
-                r.follower.pose().heading()
-        );
-        r.follower.manual(powers);
+                robotPose.heading()
+        );r.follower.manual(powers);
+
+        double distance = r.turret.distanceToGoal(robotPose);
 
 
-        if (gamepad1.right_trigger > 0.1 )
-            r.shooter.setVelocity();
-        else r.shooter.stop();
+            r.shooter.aim(distance);
 
+        if (gamepad2.right_trigger > 0.1) {
+            r.shooter.stop();
+        }
 
-
-        //INTAKE
-        if (gamepad1.rightBumperWasPressed()) intakeOn = (intakeOn == 1) ? 0 : 1;
-        if (gamepad1.leftBumperWasPressed()) intakeOn = (intakeOn == 2) ? 0 : 2;
-
-
-        else if (intakeOn == 1) r.intake.spin();
-        else if (intakeOn == 2) r.intake.out();
-        else r.intake.stop();
-
-
-        if (gamepad1.a){
+        if (gamepad1.a) {
             r.shooter.open();
-        }else {
+        } else {
             r.shooter.close();
         }
 
-        r.update();
+        if (gamepad2.rightBumperWasPressed()) intakeOn = (intakeOn == 1) ? 0 : 1;
+        if (gamepad2.leftBumperWasPressed())  intakeOn = (intakeOn == 2) ? 0 : 2;
 
+        if (intakeOn == 1) r.intake.spin();
+        else if (intakeOn == 2) r.intake.out();
+        else r.intake.stop();
 
-        r.follower.update();
-        Pose robotPose = r.follower.pose();
+        if (gamepad2.dpad_up)   r.turret.setTarget(Turret.Target.A);
+        if (gamepad2.dpad_down) r.turret.setTarget(Turret.Target.B);
+        if (gamepad2.dpad_left) r.turret.setTarget(Turret.Target.AUTO);
 
-
-        telemetry.addData("x", r.follower.pose().x());
-        telemetry.addData("y", r.follower.pose().y());
-        telemetry.addData("heading deg", Math.toDegrees(r.follower.pose().heading()));
-
-        telemetry.addData("erro", r.turret.getError());
+        // TELEMETRIA
+        telemetry.addData("x", robotPose.x());
+        telemetry.addData("y", robotPose.y());
+        telemetry.addData("heading deg", Math.toDegrees(robotPose.heading()));
+        telemetry.addData("hive", r.turret.isUsingA() ? "A" : "B");
+        telemetry.addData("distancia", distance);
+        telemetry.addData("erro torreta (deg)", Math.toDegrees(r.turret.getError()));
+        telemetry.addData("alcancavel", r.turret.isReachable());
+        telemetry.addData("torreta pronta", r.turret.isReady());
+        telemetry.addData("vel alvo", r.shooter.getTargetVel());
+        telemetry.addData("vel atual", r.shooter.getVel());
+        telemetry.addData("shooter pronto", r.shooter.atSpeed());
         telemetry.update();
     }
 }

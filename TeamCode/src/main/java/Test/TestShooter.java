@@ -21,7 +21,7 @@ public class TestShooter extends OpMode {
     public void loop() {
 
         if (gamepad1.right_trigger > 0.1){
-            shooter.setVelocity();
+            shooter.setVelocity(1000);
         }else{
             shooter.stop();
         }

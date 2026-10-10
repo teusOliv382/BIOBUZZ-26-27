@@ -29,14 +29,14 @@ public class Turret {
 
     // ---------- Geometria ----------
     // Alvos no campo (polegadas, mesmo referencial do Pedro)
-    public static double AX = -4, AY = -50;
+    public static double AX = -5, AY = -50;
     public static double BX = -4, BY = -80;
     // Ajuste fino por alvo (rad). Positivo = gira no sentido anti-horário.
     public static double TRIM_A = 0.0, TRIM_B = 0.0;
     // Eixo da torreta em relação ao centro do robô do Pedro (referencial do robô: X frente, Y esquerda)
     public static double OFFSET_X = -2.008, OFFSET_Y = 0.0;
     // Linha que divide as duas metades + histerese para não ficar trocando de alvo em cima da linha
-    public static double SPLIT_Y =-70;
+    public static double SPLIT_Y = -70;
     public static double HYSTERESIS = 3.0;
 
     // ---------- Compensação de movimento ----------
@@ -45,6 +45,7 @@ public class Turret {
     public static double TOF_BASE = 0.15, TOF_PER_INCH = 0.004;  // tempo de voo = base + k*dist (CALIBRE)
     public static int ITERATIONS = 4;
     public static double OMEGA_FILTER = 0.5;                     // 0..1 (1 = sem filtro)
+    public static double VEL_FILTER = 0.5;                       // filtro da velocidade estimada pela pose
 
     // ---------- Pronto para atirar ----------
     public static double TARGET_HALF_WIDTH = 5.0;  // pol, meia largura efetiva do alvo
@@ -60,6 +61,12 @@ public class Turret {
     private double distance = 1e9;   // "infinito" até o primeiro aim(): nunca fica pronto sem mira
     private double integral = 0;
 
+    /** AUTO = escolhe pela metade do campo; A/B = força um hive. */
+    public enum Target { AUTO, A, B }
+    private Target forced = Target.AUTO;
+    public void setTarget(Target t) { forced = t; }
+    public Target getForcedTarget() { return forced; }
+
     // leituras do loop atual
     private double angle = 0, angVel = 0;
 
@@ -67,6 +74,11 @@ public class Turret {
     private double lastHeading = 0, omega = 0;
     private long lastNanos = 0;
     private boolean first = true;
+
+    // estimativa de velocidade do robô no campo (pol/s)
+    private double lastX = 0, lastY = 0, estVx = 0, estVy = 0;
+    private long lastVelNanos = 0;
+    private boolean firstVel = true;
 
     private long lastPeriodicNanos = 0;
     private long readySinceNanos = -1;
@@ -90,6 +102,12 @@ public class Turret {
         aim(pose, vel.x(), vel.y(), Double.NaN);
     }
 
+    /** Versão só com a pose: a velocidade do robô é estimada pela variação da pose entre loops. */
+    public void aim(Pose pose) {
+        updateVelocityEstimate(pose);
+        aim(pose, estVx, estVy, Double.NaN);
+    }
+
     /**
      * vx, vy: velocidade do robô no referencial do CAMPO (pol/s).
      * omegaRobot: velocidade angular do robô (rad/s). Passe Double.NaN para estimar pelo heading.
@@ -108,9 +126,8 @@ public class Turret {
         double py = pose.y() + vy * lat;
 
         // 2) escolhe o alvo pela metade do campo, com histerese
-        if (usingA && py < SPLIT_Y - HYSTERESIS) usingA = false;
-        else if (!usingA && py > SPLIT_Y + HYSTERESIS) usingA = true;
-        double gx = usingA ? AX : BX, gy = usingA ? AY : BY;
+        updateSide(py);
+        double gx = getGoalX(), gy = getGoalY();
         double targetTrim = usingA ? TRIM_A : TRIM_B;
 
         // 3) posição e velocidade do EIXO da torreta no campo
@@ -140,6 +157,25 @@ public class Turret {
         double ffVel = fieldRate - w;
 
         setTarget(desired, ffVel);
+    }
+
+    /** Troca de hive pela metade do campo (Y), com histerese. */
+    private void updateSide(double y) {
+        if (forced == Target.A) { usingA = true; return; }
+        if (forced == Target.B) { usingA = false; return; }
+        if (usingA && y < SPLIT_Y - HYSTERESIS) usingA = false;
+        else if (!usingA && y > SPLIT_Y + HYSTERESIS) usingA = true;
+    }
+
+    private void updateVelocityEstimate(Pose pose) {
+        long now = System.nanoTime();
+        if (firstVel) { lastX = pose.x(); lastY = pose.y(); lastVelNanos = now; firstVel = false; return; }
+        double dt = (now - lastVelNanos) * 1e-9;
+        if (dt > 1e-4) {
+            estVx += VEL_FILTER * ((pose.x() - lastX) / dt - estVx);
+            estVy += VEL_FILTER * ((pose.y() - lastY) / dt - estVy);
+            lastX = pose.x(); lastY = pose.y(); lastVelNanos = now;
+        }
     }
 
     private void updateOmega(double heading) {
@@ -223,6 +259,22 @@ public class Turret {
         else readySinceNanos = -1;
     }
 
+    // ================= Hive ativo =================
+    public double getGoalX() { return usingA ? AX : BX; }
+    public double getGoalY() { return usingA ? AY : BY; }
+
+    /** Pose do hive que a torreta está mirando agora (A ou B). */
+    public Pose getGoalPose() { return new Pose(getGoalX(), getGoalY()); }
+
+    /**
+     * Distância do robô até o hive ativo.
+     * Também atualiza o lado sozinho, então funciona mesmo se o aim() não tiver rodado neste loop.
+     */
+    public double distanceToGoal(Pose robotPose) {
+        updateSide(robotPose.y());
+        return robotPose.distance(getGoalPose());
+    }
+
     // ================= Utilidades =================
     public boolean isReady() {
         return readySinceNanos >= 0
@@ -236,7 +288,7 @@ public class Turret {
     public double getError() { return error; }
     public double getTargetAngle() { return targetRad; }
     public double getTargetVelocity() { return targetVel; }
-    /** Distância até o alvo VIRTUAL (já compensado). Use para escolher a velocidade do shooter. */
+    /** Distância até o alvo VIRTUAL (já compensado), medida do eixo da torreta. */
     public double getDistance() { return distance; }
     public boolean isUsingA() { return usingA; }
     public boolean isReachable() { return reachable; }
