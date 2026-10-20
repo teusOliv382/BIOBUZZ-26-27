@@ -87,24 +87,6 @@ public class AutoBlue extends CommandOpMode {
         return curve(ultimoShoot, controlPark, park).linear(ultimoShoot, park);
     }
 
-    private Command autoRotine(){
-        return sequential(
-
-                Commands.instant(r.intake::spin),
-                waitMs(600),
-                Commands.instant(r.shooter::close),
-                follow(r.follower, IntakeFlor()),
-                follow(r.follower, Flor()),
-                follow(r.follower, hiveShoot()),
-                instant(r.intake::down),
-                waitMs(1000),
-                follow(r.follower, flor()),
-                waitMs(1000),
-                follow(r.follower, secondTip()),
-                waitMs(400),
-                Commands.instant(r.intake::down)
-        );
-    }
 
 
     @Override

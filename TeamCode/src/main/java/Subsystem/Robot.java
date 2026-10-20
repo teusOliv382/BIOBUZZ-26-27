@@ -44,9 +44,6 @@ public class Robot {
     public void update() {
         clearCache();
         follower.update();
-        // pose + VELOCIDADE do robô (não a pose de novo!)
-        turret.aim(follower.pose(), follower.velocity().toVector2D());
-        turret.periodic();
     }
 
     /** AUTÔNOMO. Igual ao update(), sem follower.update() (quem atualiza é o follow()). */

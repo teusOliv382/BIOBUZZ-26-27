@@ -1,3 +1,6 @@
+import static Subsystem.Robot.defaultPose;
+
+import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.drivetrain.DrivePowers;
 import com.pedropathing.follower.ManualDrive;
 import com.pedropathing.math.Pose;
@@ -6,11 +9,15 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
 import Subsystem.Robot;
 
+@Configurable
 @com.qualcomm.robotcore.eventloop.opmode.TeleOp
 public class TeleOp extends OpMode {
 
-    public int intakeOn = 0;
-    public boolean shooterOn = true;   // X do gamepad1 liga/desliga
+    public int intakeOn = 1;
+    public boolean shooterOn = true;
+    public boolean turretOn = true;
+    public static double DIST_OFFSET_A = 0;   // pol, ajuste no Panels
+    public static double DIST_OFFSET_B = 0;// X do gamepad1 liga/desliga
 
     public Robot r;
 
@@ -18,12 +25,12 @@ public class TeleOp extends OpMode {
     @Override
     public void init() {
         r = new Robot(hardwareMap);
-        r.follower.setPose(new Pose(0, 0, Math.toRadians(0)));
+        r.follower.setPose(defaultPose);
         r.turret.resetTurret();
 
         // posições dos hives (basta definir uma vez)
-        r.turret.setHiveA(new Pose(-3, -55));
-        r.turret.setHiveB(new Pose(-3, -65));
+        r.turret.setHiveA(new Pose(-3, -50));
+        r.turret.setHiveB(new Pose(-3, -70));
     }
 
 
@@ -50,7 +57,7 @@ public class TeleOp extends OpMode {
         else r.intake.stop();
 
 
-        if (gamepad1.a){
+        if (gamepad1.right_trigger > 0.1){
             r.shooter.open();
         }else {
             r.shooter.close();
@@ -67,13 +74,24 @@ public class TeleOp extends OpMode {
             r.follower.setPose(new Pose(0, 0));
         }
 
-        double distHive = robotPose.distance(new Pose(-4, -63.5));;
-       if (shooterOn) r.shooter.aim(distHive);
+        double distHive = r.turret.getShotDistance();
+        if (Double.isNaN(distHive)) distHive = r.turret.distanceToGoal(robotPose);
+
 
         if (gamepad2.xWasPressed()) shooterOn = !shooterOn;
 
-        if (shooterOn) r.shooter.aim(distHive);
+        double offset = r.turret.isUsingA() ? DIST_OFFSET_A : DIST_OFFSET_B;
+        if (shooterOn) r.shooter.aim(distHive + offset);
         else r.shooter.stop();
+
+        if (gamepad2.aWasPressed()) turretOn = !turretOn;
+
+        if (turretOn) {
+            r.turret.aim(r.follower.pose(), r.follower.velocity().toVector2D());
+            r.turret.periodic();
+        }else {
+            r.turret.off();
+        }
 
 
         telemetry.addData("x", robotPose.x());
