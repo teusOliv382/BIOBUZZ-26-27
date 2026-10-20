@@ -8,80 +8,57 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
+/**
+ * Torreta com motor + encoder, com dois hives (A e B) e compensação de velocidade.
+ *
+ * A DISTÂNCIA para o shooter é calculada aqui, no mesmo instante e do mesmo ponto
+ * de onde a torreta mira: a POSE DO ROBÔ (odometria), já com a posição prevista
+ * para quando a bola chegar. Assim mira e distância nunca discordam.
+ */
 @Configurable
 public class Turret {
 
-    // ---------- Encoder / limites ----------
-    public static double RPT = 0.0040992;            // rad por tick (2*PI / ticks por volta da torreta)
-    public static double MIN_RAD = -3.0, MAX_RAD = 3.0;
-    public static double LIMIT_MARGIN = 0.05;        // rad: passou do limite -> só aceita potência de volta
+    // ---------- Mecânica ----------
+    public static double RPT = 0.0040992;     // rad por tick
+    public static double LIMIT = Math.toRadians(130); // ±90°
 
     // ---------- Controle ----------
-    public static double kP = 1.2;       // potência por rad de erro
-    public static double kI = 0.0;       // só atua perto do alvo (I_ZONE) e com alvo parado
-    public static double I_ZONE = 0.05;  // rad
-    public static double I_MAX = 0.15;   // potência máxima do termo integral
-    public static double kD = 0.03;      // potência por rad/s de erro de velocidade
-    public static double kV = 0.0;       // potência por rad/s (~ 1 / velocidade máxima)
-    public static double kS = 0.05;      // vence atrito estático
-    public static double DEADBAND = 0.001; // rad
-    public static boolean ENABLED = true;  // chave do painel (o liga/desliga do código é por instância)
+    public static double kP = 1.6;    // potência por rad de erro
+    public static double kD = 0.04;   // amortece (rad/s)
+    public static double kS = 0.08;   // vence o atrito
+    public static double kV = 0.06;   // feedforward: potência por rad/s que o alvo está andando
+    public static double READY_DEG = 2.0;
 
-    // ---------- Geometria ----------
-    // Alvos no campo (polegadas, mesmo referencial do Pedro)
-    public static double AX = -5, AY = -50;
-    public static double BX = -4, BY = -80;
-    // Ajuste fino por alvo (rad). Positivo = gira no sentido anti-horário.
-    public static double TRIM_A = 0.0, TRIM_B = 0.0;
-    // Eixo da torreta em relação ao centro do robô do Pedro (referencial do robô: X frente, Y esquerda)
-    public static double OFFSET_X = -2.008, OFFSET_Y = 0.0;
-    // Linha que divide as duas metades + histerese para não ficar trocando de alvo em cima da linha
-    public static double SPLIT_Y = -70;
-    public static double HYSTERESIS = 3.0;
+    // ---------- Compensação de velocidade ----------
+    public static double TOF = 0.40;        // s de voo da bola. 0 = sem compensação
+    public static double ROBOT_VEL_FILTER = 0.4; // filtro da velocidade estimada do robô (0..1, 1 = sem filtro)
 
-    // ---------- Compensação de movimento ----------
-    public static boolean COMPENSATE = true;
-    public static double LATENCY = 0.04;                         // s (sensor -> motor)
-    public static double TOF_BASE = 0.15, TOF_PER_INCH = 0.004;  // tempo de voo = base + k*dist (CALIBRE)
-    public static int ITERATIONS = 4;
-    public static double OMEGA_FILTER = 0.5;                     // 0..1 (1 = sem filtro)
-    public static double VEL_FILTER = 0.5;                       // filtro da velocidade estimada pela pose
+    // ---------- Hives ----------
+    public static Pose hiveA = new Pose(-3, -50);
+    public static Pose hiveB = new Pose(-3, -70);
+    public static double SPLIT_Y = -60;     // acima = A, abaixo = B
+    public static double HYSTERESIS = 3.0;  // pol além da linha para trocar
 
-    // ---------- Pronto para atirar ----------
-    public static double TARGET_HALF_WIDTH = 5.0;  // pol, meia largura efetiva do alvo
-    public static double READY_VEL_TOL = 0.6;      // rad/s de erro de velocidade aceitável
-    public static double READY_TIME = 0.05;        // s que precisa ficar dentro da tolerância
+    public static boolean on = true;
+
+    private static final double DEADBAND = 0.001;     // rad
+    private static final double LIMIT_MARGIN = 0.05;  // rad
+    private static final double MAX_STEP = 0.4;       // rad: pulo maior que isso = troca de alvo, não movimento
 
     private final DcMotorEx m;
 
-    private boolean enabled = true;
-    private boolean usingA = true;
-    private boolean reachable = true;
-    private double targetRad = 0, targetVel = 0, error = 0, trim = 0;
-    private double distance = 1e9;   // "infinito" até o primeiro aim(): nunca fica pronto sem mira
-    private double integral = 0;
+    private double target = 0, targetRate = 0, error = 0;
+    private double lastTarget = Double.NaN;
+    private long lastTime = 0;
+    private boolean usingA = true, reachable = true;
 
-    /** AUTO = escolhe pela metade do campo; A/B = força um hive. */
-    public enum Target { AUTO, A, B }
-    private Target forced = Target.AUTO;
-    public void setTarget(Target t) { forced = t; }
-    public Target getForcedTarget() { return forced; }
+    // velocidade do robô estimada pela própria odometria (pol/s, campo)
+    private double robotVx = 0, robotVy = 0;
+    private double lastPoseX = Double.NaN, lastPoseY = Double.NaN;
+    private long lastPoseTime = 0;
 
-    // leituras do loop atual
-    private double angle = 0, angVel = 0;
-
-    // estimativa de velocidade angular do robô
-    private double lastHeading = 0, omega = 0;
-    private long lastNanos = 0;
-    private boolean first = true;
-
-    // estimativa de velocidade do robô no campo (pol/s)
-    private double lastX = 0, lastY = 0, estVx = 0, estVy = 0;
-    private long lastVelNanos = 0;
-    private boolean firstVel = true;
-
-    private long lastPeriodicNanos = 0;
-    private long readySinceNanos = -1;
+    // distância usada no último aim() — é ESSA que o shooter deve usar
+    private double shotDistance = Double.NaN;
 
     public Turret(HardwareMap hw) {
         m = hw.get(DcMotorEx.class, "t");
@@ -91,227 +68,172 @@ public class Turret {
         m.setPower(0);
     }
 
-    // ================= Medição =================
-    /** Ângulo cru em rad (sem normalizar). Zero = posição do reset do encoder (torreta olhando para a frente do robô). */
-    public double getAngle() { return m.getCurrentPosition() * RPT; }
-    public double getVelocity() { return m.getVelocity() * RPT; }
-
     // ================= Mira =================
-    /** Chame uma vez por loop, depois do follower.update() e antes do periodic(). */
-    public void aim(Pose pose, Vector2D vel) {
-        aim(pose, vel.x(), vel.y(), Double.NaN);
-    }
-
-    /** Versão só com a pose: a velocidade do robô é estimada pela variação da pose entre loops. */
-    public void aim(Pose pose) {
-        updateVelocityEstimate(pose);
-        aim(pose, estVx, estVy, Double.NaN);
-    }
 
     /**
-     * vx, vy: velocidade do robô no referencial do CAMPO (pol/s).
-     * omegaRobot: velocidade angular do robô (rad/s). Passe Double.NaN para estimar pelo heading.
+     * Chame UMA vez por loop. Mira no hive ativo e calcula a distância do tiro.
+     * A velocidade do robô é estimada aqui mesmo a partir da pose.
      */
-    public void aim(Pose pose, double vx, double vy, double omegaRobot) {
-        updateOmega(pose.heading());
-        double wIn = Double.isNaN(omegaRobot) ? omega : omegaRobot;
-
-        if (!COMPENSATE) { vx = 0; vy = 0; }
-        double w   = COMPENSATE ? wIn : 0;
-        double lat = COMPENSATE ? LATENCY : 0;
-
-        // 1) pose prevista (compensa a latência)
-        double h  = pose.heading() + w * lat;
-        double px = pose.x() + vx * lat;
-        double py = pose.y() + vy * lat;
-
-        // 2) escolhe o alvo pela metade do campo, com histerese
-        updateSide(py);
-        double gx = getGoalX(), gy = getGoalY();
-        double targetTrim = usingA ? TRIM_A : TRIM_B;
-
-        // 3) posição e velocidade do EIXO da torreta no campo
-        double c = Math.cos(h), s = Math.sin(h);
-        double ox = OFFSET_X * c - OFFSET_Y * s;
-        double oy = OFFSET_X * s + OFFSET_Y * c;
-        double tx = px + ox, ty = py + oy;
-        double tvx = vx - w * oy;
-        double tvy = vy + w * ox;
-
-        // 4) alvo virtual (compensa a velocidade do robô durante o voo da bola)
-        double vtx = gx, vty = gy;
-        if (COMPENSATE) {
-            for (int i = 0; i < ITERATIONS; i++) {
-                double d = Math.hypot(vtx - tx, vty - ty);
-                double tof = TOF_BASE + TOF_PER_INCH * d;
-                vtx = gx - tvx * tof;
-                vty = gy - tvy * tof;
-            }
-        }
-        double dx = vtx - tx, dy = vty - ty;
-        distance = Math.max(Math.hypot(dx, dy), 1e-6);
-
-        // 5) ângulo no referencial do robô + feedforward de velocidade
-        double desired = Math.atan2(dy, dx) - h + trim + targetTrim;
-        double fieldRate = (dy * tvx - dx * tvy) / (distance * distance);
-        double ffVel = fieldRate - w;
-
-        setTarget(desired, ffVel);
+    public void aim(Pose robot) {
+        updateRobotVelocity(robot);
+        aimInternal(robot, robotVx, robotVy);
     }
 
-    /** Troca de hive pela metade do campo (Y), com histerese. */
+    /** Mesma coisa, mas usando a velocidade que você já tem (pol/s, referencial do campo). */
+    public void aim(Pose robot, Vector2D velocity) {
+        updateRobotVelocity(robot); // mantém o histórico em dia
+        if (velocity == null) aimInternal(robot, 0, 0);
+        else aimInternal(robot, velocity.x(), velocity.y());
+    }
+
+    private void aimInternal(Pose robot, double vx, double vy) {
+        updateSide(robot.y());
+        Pose goal = getGoalPose();
+
+        // onde o ROBÔ vai estar quando a bola chegar (pose da odometria + velocidade * TOF)
+        double t = Math.max(0, TOF);
+        Pose shotFrom = new Pose(robot.x() + vx * t, robot.y() + vy * t, robot.heading());
+
+        // 3) distância e mira saem DO MESMO PONTO
+        shotDistance = Math.hypot(goal.x() - shotFrom.x(), goal.y() - shotFrom.y());
+        face(goal, shotFrom);
+    }
+
+    /** Aponta para targetPose estando em robotPose. */
+    public void face(Pose targetPose, Pose robotPose) {
+        double angleToTarget = Math.atan2(
+                targetPose.y() - robotPose.y(),
+                targetPose.x() - robotPose.x());
+        setYaw(angleToTarget - robotPose.heading());
+    }
+
+    /** Onde o robô vai estar quando a bola chegar. */
+    public static Pose getPredictedPose(Pose current, Vector2D velocity) {
+        if (velocity == null || TOF <= 0) return current;
+        return new Pose(
+                current.x() + velocity.x() * TOF,
+                current.y() + velocity.y() * TOF,
+                current.heading());
+    }
+
+    private void updateRobotVelocity(Pose robot) {
+        long now = System.nanoTime();
+        if (!Double.isNaN(lastPoseX)) {
+            double dt = (now - lastPoseTime) * 1e-9;
+            if (dt > 1e-3 && dt < 0.5) {
+                double vx = (robot.x() - lastPoseX) / dt;
+                double vy = (robot.y() - lastPoseY) / dt;
+                robotVx += ROBOT_VEL_FILTER * (vx - robotVx);
+                robotVy += ROBOT_VEL_FILTER * (vy - robotVy);
+            }
+        }
+        lastPoseX = robot.x();
+        lastPoseY = robot.y();
+        lastPoseTime = now;
+    }
+
+    public void setYaw(double radians) {
+        radians = normalizeAngle(radians);
+        reachable = Math.abs(radians) <= LIMIT;
+        double newTarget = clamp(radians, -LIMIT, LIMIT);
+
+        long now = System.nanoTime();
+        if (!Double.isNaN(lastTarget)) {
+            double dt = (now - lastTime) * 1e-9;
+            double step = newTarget - lastTarget;
+            double rate = (dt > 1e-3 && Math.abs(step) < MAX_STEP) ? step / dt : 0;
+            targetRate += 0.5 * (rate - targetRate);
+        }
+        if (!reachable) targetRate = 0;
+
+        lastTarget = newTarget;
+        lastTime = now;
+        target = newTarget;
+    }
+
+    // ================= Controle =================
+
+    /** Chame uma vez por loop, depois do aim(). */
+    public void periodic() {
+        double angle = getAngle();
+        double vel = getVelocity();
+        error = target - angle;
+
+        if (!on) { m.setPower(0); return; }
+
+        double u = kP * error
+                + kD * (targetRate - vel)
+                + kV * targetRate;
+        if (Math.abs(error) > DEADBAND) u += kS * Math.signum(error);
+
+        if (angle >= LIMIT + LIMIT_MARGIN && u > 0) u = 0;
+        if (angle <= -LIMIT - LIMIT_MARGIN && u < 0) u = 0;
+
+        m.setPower(clamp(u, -1, 1));
+    }
+
+    // ================= Hives =================
+
     private void updateSide(double y) {
-        if (forced == Target.A) { usingA = true; return; }
-        if (forced == Target.B) { usingA = false; return; }
         if (usingA && y < SPLIT_Y - HYSTERESIS) usingA = false;
         else if (!usingA && y > SPLIT_Y + HYSTERESIS) usingA = true;
     }
 
-    private void updateVelocityEstimate(Pose pose) {
-        long now = System.nanoTime();
-        if (firstVel) { lastX = pose.x(); lastY = pose.y(); lastVelNanos = now; firstVel = false; return; }
-        double dt = (now - lastVelNanos) * 1e-9;
-        if (dt > 1e-4) {
-            estVx += VEL_FILTER * ((pose.x() - lastX) / dt - estVx);
-            estVy += VEL_FILTER * ((pose.y() - lastY) / dt - estVy);
-            lastX = pose.x(); lastY = pose.y(); lastVelNanos = now;
-        }
-    }
+    public void setHiveA(Pose p) { hiveA = p; }
+    public void setHiveB(Pose p) { hiveB = p; }
+    public void setHives(Pose a, Pose b) { hiveA = a; hiveB = b; }
 
-    private void updateOmega(double heading) {
-        long now = System.nanoTime();
-        if (first) { lastHeading = heading; lastNanos = now; first = false; return; }
-        double dt = (now - lastNanos) * 1e-9;
-        if (dt > 1e-4) {
-            double dh = wrap(heading - lastHeading);
-            omega += OMEGA_FILTER * (dh / dt - omega);
-            lastHeading = heading;
-            lastNanos = now;
-        }
-    }
-
-    private void setTarget(double desiredRad, double velRadPerSec) {
-        double cur = getAngle();
-        double best = Double.NaN, bestDist = Double.MAX_VALUE;
-        for (int k = -2; k <= 2; k++) {
-            double cand = desiredRad + k * 2 * Math.PI;
-            if (cand >= MIN_RAD && cand <= MAX_RAD) {
-                double d = Math.abs(cand - cur);
-                if (d < bestDist) { bestDist = d; best = cand; }
-            }
-        }
-        reachable = !Double.isNaN(best);
-        if (!reachable) {
-            // Alvo na zona morta (atrás dos limites): fica no limite em que a torreta JÁ está,
-            // em vez de dar a volta inteira e voltar quando o alvo cruzar a zona morta.
-            best = (Math.abs(cur - MAX_RAD) <= Math.abs(cur - MIN_RAD)) ? MAX_RAD : MIN_RAD;
-            velRadPerSec = 0;
-        }
-        targetRad = best;
-        targetVel = velRadPerSec;
-    }
-
-    /** Chame uma vez por loop, depois do aim(). */
-    public void periodic() {
-        long now = System.nanoTime();
-        double dt = lastPeriodicNanos == 0 ? 0 : (now - lastPeriodicNanos) * 1e-9;
-        lastPeriodicNanos = now;
-
-        // lê o encoder UMA vez por loop
-        angle = getAngle();
-        angVel = getVelocity();
-        error = targetRad - angle;
-
-        if (!ENABLED || !enabled) {
-            m.setPower(0);
-            integral = 0;
-            readySinceNanos = -1;
-            return;
-        }
-
-        // integral só perto do alvo e com o alvo parado (evita overshoot nas viradas rápidas)
-        if (kI != 0 && Math.abs(error) < I_ZONE && Math.abs(targetVel) < 0.2) {
-            integral = clamp(integral + kI * error * dt, -I_MAX, I_MAX);
-        } else {
-            integral = 0;
-        }
-
-        double u = kP * error
-                + kD * (targetVel - angVel)
-                + kV * targetVel
-                + integral;
-
-        if (Math.abs(error) > DEADBAND) {
-            u += kS * Math.signum(Math.abs(targetVel) > 0.05 ? targetVel : error);
-        }
-
-        // proteção de limite: passou do limite, só deixa voltar
-        if (angle >= MAX_RAD + LIMIT_MARGIN && u > 0) u = 0;
-        if (angle <= MIN_RAD - LIMIT_MARGIN && u < 0) u = 0;
-
-        m.setPower(clamp(u, -1, 1));
-
-        // "pronto" = alvo alcançável + erro dentro da largura do alvo + velocidade casada, por READY_TIME
-        boolean inTol = reachable
-                && Math.abs(error) < getTolerance()
-                && Math.abs(targetVel - angVel) < READY_VEL_TOL;
-        if (inTol) { if (readySinceNanos < 0) readySinceNanos = now; }
-        else readySinceNanos = -1;
-    }
-
-    // ================= Hive ativo =================
-    public double getGoalX() { return usingA ? AX : BX; }
-    public double getGoalY() { return usingA ? AY : BY; }
-
-    /** Pose do hive que a torreta está mirando agora (A ou B). */
-    public Pose getGoalPose() { return new Pose(getGoalX(), getGoalY()); }
-
-    /**
-     * Distância do robô até o hive ativo.
-     * Também atualiza o lado sozinho, então funciona mesmo se o aim() não tiver rodado neste loop.
-     */
-    public double distanceToGoal(Pose robotPose) {
-        updateSide(robotPose.y());
-        return robotPose.distance(getGoalPose());
-    }
-
-    // ================= Utilidades =================
-    public boolean isReady() {
-        return readySinceNanos >= 0
-                && (System.nanoTime() - readySinceNanos) * 1e-9 >= READY_TIME;
-    }
-
-    /** Erro angular máximo (rad) para a bola ainda entrar no alvo. */
-    public double getTolerance() { return Math.atan2(TARGET_HALF_WIDTH, distance); }
-
-    public void setTrim(double rad) { trim = rad; }          // ajuste geral / correção por visão
-    public double getError() { return error; }
-    public double getTargetAngle() { return targetRad; }
-    public double getTargetVelocity() { return targetVel; }
-    /** Distância até o alvo VIRTUAL (já compensado), medida do eixo da torreta. */
-    public double getDistance() { return distance; }
     public boolean isUsingA() { return usingA; }
+    public Pose getGoalPose() { return usingA ? hiveA : hiveB; }
+
+    /** Distância do tiro calculada no último aim() (pivô previsto -> hive ativo). USE ESTA no shooter. */
+    public double getShotDistance() { return shotDistance; }
+
+    /** Distância "crua" do robô (sem previsão) até o hive ativo. */
+    public double distanceToGoal(Pose robot) {
+        updateSide(robot.y());
+        Pose g = getGoalPose();
+        return Math.hypot(g.x() - robot.x(), g.y() - robot.y());
+    }
+
+    public double getRobotVx() { return robotVx; }
+    public double getRobotVy() { return robotVy; }
+
+    public double getSplitY() { return SPLIT_Y; }
+    public double sideOf(double x, double y) { return y - SPLIT_Y; }
+
+    // ================= Leituras =================
+
+    public double getAngle() { return m.getCurrentPosition() * RPT; }
+    public double getVelocity() { return m.getVelocity() * RPT; }
+    public double getYaw() { return getAngle(); }
+    public double getTargetAngle() { return target; }
+    public double getError() { return error; }
+    public double getErrorDeg() { return Math.toDegrees(error); }
     public boolean isReachable() { return reachable; }
-    public double getOmega() { return omega; }
+    public boolean isReady() { return reachable && Math.abs(getErrorDeg()) < READY_DEG; }
 
     public void resetTurret() {
         m.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        targetRad = 0; targetVel = 0; error = 0; integral = 0;
-        readySinceNanos = -1;
+        target = 0; targetRate = 0; error = 0; lastTarget = Double.NaN;
+        robotVx = 0; robotVy = 0; lastPoseX = Double.NaN; lastPoseY = Double.NaN;
+        shotDistance = Double.NaN;
     }
 
-    public void off() { enabled = false; m.setPower(0); }
-    public void on() { enabled = true; }
+    public void on() { on = true; }
+    public void off() { on = false; m.setPower(0); }
+
+    // ================= Utilidades =================
+
+    public static double normalizeAngle(double a) {
+        a = a % (Math.PI * 2);
+        if (a <= -Math.PI) a += Math.PI * 2;
+        if (a > Math.PI) a -= Math.PI * 2;
+        return a;
+    }
 
     private static double clamp(double v, double lo, double hi) {
         return Math.max(lo, Math.min(hi, v));
-    }
-
-    private static double wrap(double a) {
-        a = a % (2 * Math.PI);
-        if (a <= -Math.PI) a += 2 * Math.PI;
-        if (a > Math.PI) a -= 2 * Math.PI;
-        return a;
     }
 }

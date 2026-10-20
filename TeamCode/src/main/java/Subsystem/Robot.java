@@ -44,22 +44,17 @@ public class Robot {
     public void update() {
         clearCache();
         follower.update();
-        turret.aim(follower.pose());
+        // pose + VELOCIDADE do robô (não a pose de novo!)
+        turret.aim(follower.pose(), follower.velocity().toVector2D());
         turret.periodic();
     }
 
-    /**
-     * AUTÔNOMO. Mesma coisa que o update(), mas SEM follower.update(),
-     * porque no autônomo quem atualiza o follower é o CommandOpMode / follow().
-     * Também mantém o shooter acompanhando a distância do hive ativo.
-     */
+    /** AUTÔNOMO. Igual ao update(), sem follower.update() (quem atualiza é o follow()). */
     public void updateAuto() {
         clearCache();
-        turret.aim(follower.pose());
+        turret.aim(follower.pose(), follower.velocity().toVector2D());
         turret.periodic();
-
-        if (shooterOn) shooter.aim(turret.distanceToGoal(follower.pose()));
-        else shooter.stop();
+        shooter.update();
     }
 
     /** Pronto para atirar: torreta mirada + flywheel na velocidade. */
