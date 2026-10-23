@@ -22,7 +22,7 @@ public class Shooter {
 
     /** Limites do hood (valor enviado ao setPosition). NUNCA passa disso. */
     public static double minHood = 0.45;
-    public static double maxHood = 0.6;
+    public static double maxHood = 0.8;
 
     public static double POLY_MIN_DIST = 0, POLY_MAX_DIST = 80;
 
@@ -133,8 +133,8 @@ public class Shooter {
 
     /** No autônomo: chame onAuto() e depois update() TODO loop. */
     public void onAuto() {
-        setVelocity(990);
-        setHood(0.45);   // 0.4 seria cortado pelo minHood de qualquer jeito
+        setVelocity(980);
+        setHood(0.60);   // 0.4 seria cortado pelo minHood de qualquer jeito
     }
 
     /** Pronto para atirar: flywheel dentro da tolerância da velocidade pedida. */
@@ -279,7 +279,7 @@ public class Shooter {
     public void close() {
         gate.setPosition(0.26);
         trava.setPosition(0.06);
-        blue();
+        violet();
     }
 
     // ================= Calibração =================
@@ -290,11 +290,9 @@ public class Shooter {
     public static double hoodAngle(double dist) {
         double x = clampDist(dist);
 
-        double h = 0.00000121212 * Math.pow(x, 4)
-                - 0.000233535  * Math.pow(x, 3)
-                + 0.0168061    * Math.pow(x, 2)
-                - 0.546421     * x
-                + 7.46082;
+        double h = 0.000140476 * Math.pow(x, 2)
+                - 0.0218214   * x
+                + 1.33625;
 
         return Math.max(minHood, Math.min(maxHood, h));
     }
@@ -302,11 +300,11 @@ public class Shooter {
     public static double flywheelSpeed(double dist) {
         double x = clampDist(dist);
 
-        double v = -0.000424242 * Math.pow(x, 4)
-                + 0.0870707   * Math.pow(x, 3)
-                - 6.56212     * Math.pow(x, 2)
-                + 217.41414   * x
-                - 1726.64502;
+        double v = -0.0000757576 * Math.pow(x, 4)
+                + 0.015303     * Math.pow(x, 3)
+                - 1.07841      * Math.pow(x, 2)
+                + 33.56656     * x
+                + 554.43182;
 
         return Math.max(minVel, Math.min(maxVel, v));
     }

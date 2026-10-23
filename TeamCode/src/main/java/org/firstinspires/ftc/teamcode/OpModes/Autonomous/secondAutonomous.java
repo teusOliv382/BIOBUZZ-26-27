@@ -20,6 +20,7 @@ import org.firstinspires.ftc.teamcode.pedro.Constants;
 
 import Subsystem.Robot;
 
+@Autonomous
 public class secondAutonomous extends CommandOpMode {
 
     Robot r;

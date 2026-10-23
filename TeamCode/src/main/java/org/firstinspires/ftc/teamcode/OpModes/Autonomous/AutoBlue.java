@@ -38,7 +38,7 @@ public class AutoBlue extends CommandOpMode {
     public final Pose hive2 = p.of(-6, -121, 90);
     public final Pose preFlor = p.of(2, -103, 270);
     public final Pose controlFLor2 = p.of(6, -103, 90);
-    public final Pose flor1 = p.of(6, -118.3, 270);
+    public final Pose flor1 = p.of(6, -118.8, 270);
     public final Pose controlHive = p.of(35, -110, 90);
     public final Pose shootHive2 = p.of(3, -114, 45);
     public final Pose prepFlor2 = p.of(33, -114, 90);
