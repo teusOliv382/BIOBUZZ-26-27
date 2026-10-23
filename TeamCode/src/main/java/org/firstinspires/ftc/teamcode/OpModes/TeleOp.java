@@ -1,3 +1,5 @@
+package org.firstinspires.ftc.teamcode.OpModes;
+
 import static Subsystem.Robot.defaultPose;
 
 import com.bylazar.configurables.annotations.Configurable;
@@ -17,7 +19,7 @@ public class TeleOp extends OpMode {
     public boolean shooterOn = true;
     public boolean turretOn = true;
     public static double DIST_OFFSET_A = 0;   // pol, ajuste no Panels
-    public static double DIST_OFFSET_B = 0;// X do gamepad1 liga/desliga
+    public static double DIST_OFFSET_B = 15;// X do gamepad1 liga/desliga
 
     public Robot r;
 
@@ -26,11 +28,14 @@ public class TeleOp extends OpMode {
     public void init() {
         r = new Robot(hardwareMap);
         r.follower.setPose(defaultPose);
-        r.turret.resetTurret();
+
+            r.turret.resetTurret();
+
+
 
         // posições dos hives (basta definir uma vez)
         r.turret.setHiveA(new Pose(-3, -50));
-        r.turret.setHiveB(new Pose(-3, -70));
+        r.turret.setHiveB(new Pose(-3, -80));
     }
 
 
@@ -70,8 +75,10 @@ public class TeleOp extends OpMode {
             r.intake.up();
         }
 
-        if (gamepad2.right_bumper){
-            r.follower.setPose(new Pose(0, 0));
+        if (gamepad2.right_bumper || gamepad1.y){
+            r.follower.setPose(new Pose(44, 0));
+        } else if (gamepad1.b || gamepad2.left_trigger > 0.1) {
+            r.follower.setPose(new Pose(44,-125));
         }
 
         double distHive = r.turret.getShotDistance();

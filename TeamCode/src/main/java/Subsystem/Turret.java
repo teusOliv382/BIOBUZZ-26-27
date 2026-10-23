@@ -34,8 +34,8 @@ public class Turret {
     public static double ROBOT_VEL_FILTER = 0.4; // filtro da velocidade estimada do robô (0..1, 1 = sem filtro)
 
     // ---------- Hives ----------
-    public static Pose hiveA = new Pose(-3, -50);
-    public static Pose hiveB = new Pose(-3, -70);
+    public static Pose hiveA = new Pose(-5, -50);
+    public static Pose hiveB = new Pose(-5, -70);
     public static double SPLIT_Y = -60;     // acima = A, abaixo = B
     public static double HYSTERESIS = 3.0;  // pol além da linha para trocar
 

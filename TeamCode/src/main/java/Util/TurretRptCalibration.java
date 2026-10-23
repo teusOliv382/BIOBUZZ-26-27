@@ -1,7 +1,7 @@
 //package Util; // ajuste para o package da pasta onde voce colocar o arquivo
 //
 //import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-//import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+//import com.qualcomm.robotcore.eventloop.opmode.org.firstinspires.ftc.teamcode.OpModes.TeleOp;
 //import com.qualcomm.robotcore.hardware.DcMotor;
 //import com.qualcomm.robotcore.hardware.DcMotorEx;
 //import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -22,7 +22,7 @@
 // *   D-pad cima/baixo   REF +/- 5 graus     D-pad dir/esq   REF +/- 1 grau
 // *   B            apaga as medidas
 // */
-//@TeleOp(name = "Turret RPT Calibration", group = "Calibracao")
+//@org.firstinspires.ftc.teamcode.OpModes.TeleOp(name = "Turret RPT Calibration", group = "Calibracao")
 //public class TurretRptCalibration extends LinearOpMode {
 //
 //    // Valor atual (copie de Turret.RPT) para comparar

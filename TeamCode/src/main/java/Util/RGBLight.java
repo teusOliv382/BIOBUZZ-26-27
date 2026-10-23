@@ -8,7 +8,7 @@ public class RGBLight {
     private Servo s;
 
     public RGBLight(HardwareMap hMap) {
-        s = hMap.get(Servo.class, "rgb");
+        s = hMap.get(Servo.class, "led");
     }
 
     public void setPosition(double i) {
