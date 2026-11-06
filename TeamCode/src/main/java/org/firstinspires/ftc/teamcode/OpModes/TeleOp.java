@@ -9,6 +9,7 @@ import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
 
+import Subsystem.Intake;
 import Subsystem.Robot;
 
 @Configurable

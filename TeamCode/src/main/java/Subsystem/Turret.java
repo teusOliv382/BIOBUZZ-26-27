@@ -35,7 +35,7 @@ public class Turret {
 
     // ---------- Hives ----------
     public static Pose hiveA = new Pose(-5, -50);
-    public static Pose hiveB = new Pose(-5, -70);
+    public static Pose hiveB = new Pose(-7.5, -70);
     public static double SPLIT_Y = -60;     // acima = A, abaixo = B
     public static double HYSTERESIS = 3.0;  // pol além da linha para trocar
 

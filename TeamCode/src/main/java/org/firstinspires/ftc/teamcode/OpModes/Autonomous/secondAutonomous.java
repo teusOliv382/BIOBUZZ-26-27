@@ -1,8 +1,6 @@
 package org.firstinspires.ftc.teamcode.OpModes.Autonomous;
 
 import com.pedropathing.api.PoseFactory;
-import com.pedropathing.math.Pose;
-import com.pedropathing.api.PoseFactory;
 import com.pedropathing.ivy.Command;
 import com.pedropathing.ivy.commands.Commands;
 import com.pedropathing.math.Pose;
@@ -20,45 +18,49 @@ import org.firstinspires.ftc.teamcode.pedro.Constants;
 
 import Subsystem.Robot;
 
-@Autonomous
+@Autonomous(name = "AUTO-UNITY")
 public class secondAutonomous extends CommandOpMode {
 
     Robot r;
 
-    private boolean started = false;
+    Command pause = waitMs(1000);
 
+    /** A torreta só se mexe depois do START (regra: o robô não pode se mover no init). */
+    private boolean started = false;
 
     private final PoseFactory p = PoseFactory.degrees();
 
     public Pose start = p.of(0, 0, 0);
-    public Pose prePark = p.of(44, -55, 270);
-
-    public Pose parkAlliance = p.of(43, 80, 270);
-    public Pose controlGarden = p.of(34, -40, 90);
-    public final Pose garden = p.of(47, -1.4, 90);
+    public final Pose control1= p.of(30, -8, 45);
+    public final Pose preIntake = p.of(47, -8, 90);
+    public final Pose garden = p.of(47, -1, 90);
     public final Pose giroTip2 = p.of(30, -15, 270);
-    public final Pose hive2 = p.of(-6, -121, 90);
-    public final Pose preFlor = p.of(4, -103, 270);
-    public final Pose controlHive = p.of(17, 110, 270);
-    public final Pose flor1 = p.of(2, -117.9, 270);
+    public final Pose hive2 = p.of(25, -121, 90);
+    public final Pose preFlor = p.of(2, -103, 270);
+    public final Pose controlFLor2 = p.of(6, -103, 90);
+    public final Pose flor1 = p.of(6, -118.8, 270);
+    public final Pose controlHive = p.of(35, -110, 90);
+    public final Pose shootHive2 = p.of(3, -114, 45);
+    public final Pose prepFlor2 = p.of(33, -114, 90);
 
+    public final Pose controlflor2 = p.of(30, -39, 0);
+    public final Pose flor2 = p.of(39.1, -39, 0);
+
+    public final Pose ultimoShoot = p.of(0, -10, 0);
+
+    public final Pose controlPark = p.of(30, -18, 160);
     private final Pose park = p.of(40, -110, 180);
 
 
-    public Path preAlliance(){
-        return line(start, prePark).linear(start, prePark);
-    }
-
-    public Path alliancePark(){
-        return line(prePark, parkAlliance).constant(parkAlliance);
-    }
-
     public Path garden(){
-        return curve(parkAlliance, controlGarden, garden).linear(parkAlliance, garden);
+        return curve(start, control1,preIntake).linear(start, preIntake);
+    }
+    public Path intakeGarden(){
+        return line(preIntake, garden).constant(garden);
     }
 
-    public Path ControlHive(){
-        return curve(garden, giroTip2, controlHive).linear(garden, controlHive);
+    public Path hive2(){
+        return curve(garden, giroTip2, controlHive, controlFLor2, hive2).linear(garden, hive2);
     }
 
     public Path Preflower(){
@@ -69,10 +71,41 @@ public class secondAutonomous extends CommandOpMode {
         return line(preFlor, hive2).linear(preFlor, hive2);
     }
 
+    public Path voltaGarden(){
+        return line(garden, preIntake).constant(garden);
+    }
+
+    //    public Path IntakeFlor() {
+//        return line(start, controlflor2).constant(flor2);
+//    }
+//    public Path Flor() {
+//        return line(controlflor2, flor2).constant(flor2);}
+//    public Path preHive(){return line(flor2, controlflor2).constant(flor2);}
+//    public Path hiveShoot() {
+//        return line(controlflor2, hive2).constant(hive2);
+//    }
+//    public Path sarrada() {
+//        return line(flor2, controlflor2).constant(flor2);
+//    }
     public Path flor() {
         return line(preFlor, flor1).constant(flor1).with(Constants.foresightConfig.timeoutConstraint.at(0.100));
     }
-
+    //    public Path secondTip() {
+//        return line(preFlor, shootHive2).linear(flor1, shootHive2);
+//    }
+    public Path volta(){return line(flor1, preFlor).constant(flor1);}
+    //    public Path controlFlor() {
+//        return line(shootHive2, prepFlor2).linear(shootHive2, prepFlor2);
+//    }
+//    public Path prepfinalFlor() {
+//        return line(prepFlor2, controlflor2).linear(prepFlor2, controlflor2);
+//    }
+//    public Path finalFlor() {
+//        return line(controlflor2, flor2).constant(flor2);
+//    }
+//    public Path finalShoot() {
+//        return line(flor2, ultimoShoot).linear(flor2, ultimoShoot);
+//    }
     public Path parking() {
         return line(hive2, park).linear(hive2, park);
     }
@@ -80,13 +113,14 @@ public class secondAutonomous extends CommandOpMode {
 
 
     @Override
-    public void init(){
+    public void init() {
         r = new Robot(hardwareMap);
         r.follower.setPose(start);
-        r.turret.resetTurret();
-        r.turret.off();
+        r.turret.resetTurret();   // torreta olhando para a FRENTE do robô aqui
+        r.turret.off();           // parada até o START
 
         schedule(
+                // Roda em TODO loop: mira da torreta + shooter seguindo a distância do hive ativo
                 Commands.infinite(() -> {
                     r.updateAuto();
                     r.follower.update();
@@ -99,7 +133,6 @@ public class secondAutonomous extends CommandOpMode {
                     telemetry.addData("Shooter pronto", r.shooter.atSpeed());
                     telemetry.update();
                 }),
-
                 sequential(
                         Commands.instant(r.intake::stop),
                         Commands.instant(r.intake::up),
@@ -108,29 +141,19 @@ public class secondAutonomous extends CommandOpMode {
                         Commands.instant(r.intake::spin),
                         Commands.waitMs(1000),
                         Commands.instant(r.shooter::close),
-                        Commands.instant(r.intake::stop),
-                        follow(r.follower, preAlliance()),
-                        follow(r.follower, alliancePark()),
-                        Commands.instant(r.intake::spin),
                         follow(r.follower, garden()),
+                        follow(r.follower, intakeGarden()),
                         Commands.waitMs(1000),
-                        follow(r.follower, ControlHive()),
-                        Commands.waitMs(500),
+                        follow(r.follower, hive2()),
+                        Commands.waitMs(1000),
                         Commands.instant(r.shooter::open),
-                        Commands.waitMs(1000),
+                        Commands.waitMs(700),
                         Commands.instant(r.shooter::close),
-                        follow(r.follower, Preflower()),
-                        follow(r.follower, flor()),
-                        Commands.waitMs(1500),
-                        follow(r.follower, secondShoot()),
-                        Commands.waitMs(800),
-                        Commands.instant(r.shooter::open),
-                        waitMs(900),
+                        Commands.instant(r.intake::stop),
+                        Commands.instant(r.shooter::stop),
                         follow(r.follower, parking())
 
-
-
-                        )
+                )
         );
     }
 
@@ -148,5 +171,4 @@ public class secondAutonomous extends CommandOpMode {
         r.shooter.stop();
         r.saveEnd();
     }
-
 }

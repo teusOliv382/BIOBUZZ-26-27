@@ -273,13 +273,11 @@ public class Shooter {
     public void open() {
         gate.setPosition(0);
         trava.setPosition(0.35);
-        blue();
     }
 
     public void close() {
         gate.setPosition(0.26);
         trava.setPosition(0.06);
-        violet();
     }
 
     // ================= Calibração =================

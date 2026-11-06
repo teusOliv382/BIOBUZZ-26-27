@@ -61,9 +61,9 @@ public class PosAuto extends OpMode {
         }
 
 
-        if (gamepad1.dpad_down){
+        if (gamepad2.dpad_down){
             r.intake.down();
-        } else if (gamepad1.dpad_up) {
+        } else if (gamepad2.dpad_up) {
             r.intake.up();
         }
 
@@ -78,7 +78,7 @@ public class PosAuto extends OpMode {
 
         if (gamepad2.xWasPressed()) shooterOn = !shooterOn;
 
-        double offset = r.turret.isUsingA() ? DIST_OFFSET_A : DIST_OFFSET_B;
+        double offset = r.turret.isUsingA() ? DIST_OFFSET_A: DIST_OFFSET_B;
         if (shooterOn) r.shooter.aim(distHive + offset);
         else r.shooter.stop();
 
@@ -90,6 +90,14 @@ public class PosAuto extends OpMode {
         }else {
             r.turret.off();
         }
+
+        if (r.turret.isUsingA()){
+            r.shooter.blue();
+        } else if (!r.turret.isUsingA()) {
+            r.shooter.violet();
+        }
+
+
 
 
         telemetry.addData("x", robotPose.x());
