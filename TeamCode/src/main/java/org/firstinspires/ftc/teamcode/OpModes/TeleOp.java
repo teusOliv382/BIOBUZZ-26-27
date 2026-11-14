@@ -19,8 +19,8 @@ public class TeleOp extends OpMode {
     public int intakeOn = 1;
     public boolean shooterOn = true;
     public boolean turretOn = true;
-    public static double DIST_OFFSET_A = 0;   // pol, ajuste no Panels
-    public static double DIST_OFFSET_B = 15;// X do gamepad1 liga/desliga
+    public static double DIST_OFFSET_A = 5;   // pol, ajuste no Panels
+    public static double DIST_OFFSET_B = 35;// X do gamepad1 liga/desliga
 
     public Robot r;
 
@@ -33,10 +33,9 @@ public class TeleOp extends OpMode {
             r.turret.resetTurret();
 
 
-
         // posições dos hives (basta definir uma vez)
         r.turret.setHiveA(new Pose(-3, -50));
-        r.turret.setHiveB(new Pose(-3, -80));
+        r.turret.setHiveB(new Pose(-10, -80));
     }
 
 

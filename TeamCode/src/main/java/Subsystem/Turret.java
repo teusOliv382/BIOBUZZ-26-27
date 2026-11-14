@@ -30,7 +30,7 @@ public class Turret {
     public static double READY_DEG = 2.0;
 
     // ---------- Compensação de velocidade ----------
-    public static double TOF = 0.40;        // s de voo da bola. 0 = sem compensação
+    public static double TOF = 0.15;        // s de voo da bola. 0 = sem compensação
     public static double ROBOT_VEL_FILTER = 0.4; // filtro da velocidade estimada do robô (0..1, 1 = sem filtro)
 
     // ---------- Hives ----------

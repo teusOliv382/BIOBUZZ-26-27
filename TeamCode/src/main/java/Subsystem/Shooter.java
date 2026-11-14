@@ -252,7 +252,7 @@ public class Shooter {
     public void angle(double dist) { setHood(hoodAngle(dist)); }
 
     /** Velocidade lida só do encoder do primeiro motor ("shooter"). */
-    public double getVel() { return shooter.getVelocity(); }
+    public double getVel() { return -shooter.getVelocity(); }
     public double getTargetVel() { return targetVel; }
     public double getDistance() { return distance; }
     public double getHood() { return Double.isNaN(hoodCmd) ? 0 : hoodCmd; }
@@ -290,7 +290,7 @@ public class Shooter {
 
         double h = 0.000140476 * Math.pow(x, 2)
                 - 0.0218214   * x
-                + 1.33625;
+                + 1.38625;
 
         return Math.max(minHood, Math.min(maxHood, h));
     }
