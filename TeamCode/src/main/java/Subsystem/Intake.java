@@ -14,20 +14,13 @@ import com.qualcomm.robotcore.hardware.Servo;
 public class Intake {
 
     public DcMotor intake;
-    public Servo four;
+
 
     public Intake(HardwareMap h){
         intake = h.get(DcMotorEx.class, "intake");
-        four = h.get(Servo.class, "four");
     }
 
-    public void down(){
-        four.setPosition(0.5);
-    }
 
-    public void up(){
-        four.setPosition(0);
-    }
 
     public void spin(){
         intake.setPower(1);
